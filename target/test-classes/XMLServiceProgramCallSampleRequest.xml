@@ -1,0 +1,1 @@
+<?xml version='1.0'?><script><pgm name='PGMCALLSTR' lib='MULE400DEV'> <parm  io='in'> <data type='30A' var='STRIN'>TEST123</data></parm><parm  io='out'> <data type='30A' var='STROUT'></data></parm></pgm></script>

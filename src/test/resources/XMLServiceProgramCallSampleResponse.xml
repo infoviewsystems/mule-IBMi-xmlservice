@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<script>
+  <pgm name='PGMCALLSTR' lib='MULE400DEV'>
+<parm io='out'>
+<data type='30A' var='STROUT'>TEST567</data>
+</parm>
+<parm io='out'>
+<data type='30A' var='STROUT1'>TEST567</data>
+</parm>
+<success><![CDATA[+++ success MULE400DEV PGMCALLSTR ]]></success>
+</pgm>
+</script>

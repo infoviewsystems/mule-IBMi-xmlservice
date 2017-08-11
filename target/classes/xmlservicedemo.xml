@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8081" basePath="/xmlservice" doc:name="HTTP Listener Configuration"/>
+        <spring:beans>
+        <spring:bean id="Datasource" name="Datasource" class="org.apache.commons.dbcp2.BasicDataSource" scope="singleton">
+            <spring:property name="driverClassName" value="com.ibm.as400.access.AS400JDBCDriver"/>
+        	<spring:property name="url" value="${DB.url}"/>
+            <spring:property name="username" value="${DB.username}"/>
+            <spring:property name="password" value="${DB.password}"/>
+            <spring:property name="maxIdle" value="${DB.maxIdle}"/>
+            <spring:property name="maxTotal" value="${DB.maxTotal}"/>
+            <spring:property name="maxWaitMillis" value="${DB.maxWaitMillis}"/>
+            <spring:property name="maxConnLifetimeMillis" value="${DB.maxConnLifetimeMillis}"/> <!-- Have to check this -->
+            <spring:property name="poolPreparedStatements" value="${DB.poolPreparedStatements}"/>
+            <spring:property name="initialSize" value="${DB.initialSize}"/>
+            <spring:property name="logExpiredConnections" value="${DB.logExpiredConnections}"/>
+            <spring:property name="removeAbandonedOnBorrow" value="${DB.removeAbandonedOnBorrow}"/>
+            <spring:property name="removeAbandonedTimeout" value="${DB.removeAbandonedTimeout}"/>
+     		<spring:property name="testWhileIdle" value="${DB.testWhileIdle}"/>
+            <spring:property name="testOnBorrow" value="${DB.testOnBorrow}"/>
+            <spring:property name="testOnReturn" value="${DB.testOnReturn}"/>
+            <spring:property name="validationQuery" value="${DB.validationQuery}"/>
+            <!-- <spring:property name="validationInterval" value="${DB.password}"/> -->
+            <spring:property name="timeBetweenEvictionRunsMillis" value="${DB.timeBetweenEvictionRunsMillis}"/>
+            <spring:property name="minEvictableIdleTimeMillis" value="${DB.minEvictableIdleTimeMillis}"/>
+        </spring:bean>
+    </spring:beans>
+    <db:generic-config name="AS400DB" dataSource-ref="Datasource" doc:name="Generic Database Configuration"/>
+    
+    <flow name="xmlservicedemoFlow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/" doc:name="HTTP"/>
+        <dw:transform-message doc:name="Transform Message" metadata:id="c3a6010b-9f63-4a61-912a-8b9451d3ca0c">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+{
+	script: {
+		pgm @(name: 'PGMCALLSTR', lib: 'MULE400DEV'): {
+			parm @(io: 'in'): {
+				data @(type: '30A' , var: 'STRIN'): inboundProperties."http.query.params".strIn
+			},
+			parm @(io: 'out'): {
+				data @(type: '30A' , var: 'STROUT'): ' '
+			}
+				
+		}
+	}
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <set-payload value="#[payload.toString().replaceAll(&quot;\&quot;&quot;, &quot;'&quot;)]" doc:name="Set Payload"/>
+        <db:stored-procedure config-ref="AS400DB" doc:name="Database">
+            <db:parameterized-query><![CDATA[CALL XMLSERVICE.iPLUG512K(:IPC,:CTL,:Req,:Res)]]></db:parameterized-query>
+            <db:in-param name="IPC" type="VARCHAR" value="*NA"/>
+            <db:in-param name="CTL" type="VARCHAR" value="*here"/>
+            <db:in-param name="Req" type="CLOB" value="#[payload]"/>
+            <db:out-param name="Res" type="CLOB"/>
+        </db:stored-procedure>
+        <set-payload value="#[payload.Res.getSubString(1,payload.Res.length())]" doc:name="Set Payload"/>
+        <dw:transform-message doc:name="Transform Message" metadata:id="a34652cc-2135-4dfe-b89e-df7baefcc63f">
+            <dw:input-payload doc:sample="XMLServiceProgramCallSampleResponse.xml" mimeType="application/xml"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	response: payload.script.pgm.*parm map ((parm , indexOfParm) -> {
+		variableName: parm.data.@var,
+		value: parm.data
+	})
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <logger message="#[&quot;response:&quot; +  payload]" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>
